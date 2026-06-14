@@ -61,7 +61,6 @@
       pointer-events: none;
       opacity: 0.05;
       mix-blend-mode: overlay;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
       background-size: 160px 160px;
     }
 
@@ -180,9 +179,7 @@
       border: 1px solid var(--panel-edge);
       border-radius: 28px;
       padding: 3.6rem 3rem;
-      backdrop-filter: blur(20px) saturate(115%);
-      -webkit-backdrop-filter: blur(20px) saturate(115%);
-      box-shadow: 0 30px 80px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+      -webkit-
     }
 
     .essay-opening {
@@ -281,14 +278,12 @@
       align-items: center;
       gap: 1rem;
       background: rgba(16, 14, 34, 0.78);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
+      -webkit-
       border: 1px solid rgba(168, 158, 201, 0.18);
       border-radius: 100px;
       padding: 0.6rem 1.4rem 0.6rem 0.85rem;
       opacity: 0;
       animation: fadeIn 1.5s ease 2.4s forwards;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.4);
       cursor: default;
     }
 
@@ -385,8 +380,7 @@
       transform: translateY(-50%);
       z-index: 91;
       background: rgba(16, 14, 34, 0.78);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
+      -webkit-
       border: 1px solid rgba(168, 158, 201, 0.18);
       border-right: none;
       border-radius: 10px 0 0 10px;
@@ -418,9 +412,7 @@
       border: 1px solid var(--panel-edge);
       border-radius: 16px;
       padding: 1.5rem 1.4rem;
-      backdrop-filter: blur(20px) saturate(115%);
-      -webkit-backdrop-filter: blur(20px) saturate(115%);
-      box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+      -webkit-
       transition: transform 0.45s cubic-bezier(.16,1,.3,1), opacity 0.35s ease;
       opacity: 0;
     }
@@ -708,7 +700,6 @@
       ctx.strokeStyle = `rgba(${s.color},1)`;
       ctx.lineWidth = s.w;
       ctx.lineCap = 'round';
-      ctx.filter = 'blur(2.5px)';
       ctx.beginPath();
       ctx.moveTo(-0.1 * W, baseY + drift);
       ctx.bezierCurveTo(
@@ -717,7 +708,6 @@
         1.1 * W,  baseY + drift - 0.02 * H
       );
       ctx.stroke();
-      ctx.filter = 'none';
       ctx.restore();
     }
     ctx.globalAlpha = 1;
@@ -725,7 +715,7 @@
 
   /* Motes — fine drifting dust */
   const MOTE_COLORS = ['#c8c2e8', '#e8e4da', '#a89ec9', '#d4a96a', '#ffffff'];
-  const MOTE_COUNT  = 130;
+  const MOTE_COUNT  = window.innerWidth > 1024 ? 60 : 130;
   let motes = [];
 
   function mkMote () {
@@ -754,30 +744,40 @@
     };
   }
 
-  function drawBlobs () {
+  let blobCanvas = null;
+
+  function buildBlobCache () {
+    blobCanvas = document.createElement('canvas');
+    blobCanvas.width  = W;
+    blobCanvas.height = H;
+    const bc = blobCanvas.getContext('2d');
     for (const b of BLOBS) {
-      const grd = ctx.createRadialGradient(
+      const grd = bc.createRadialGradient(
         b.x * W, b.y * H, 0,
         b.x * W, b.y * H, Math.max(b.rx * W, b.ry * H)
       );
       grd.addColorStop(0,   b.color + 'BB');
       grd.addColorStop(0.5, b.color + '55');
       grd.addColorStop(1,   'transparent');
-      ctx.save();
-      ctx.scale(1, (b.ry * H) / (b.rx * W));
-      ctx.globalAlpha = b.a;
-      ctx.fillStyle   = grd;
-      ctx.beginPath();
-      ctx.arc(b.x * W, (b.y * H) / ((b.ry * H) / (b.rx * W)), b.rx * W, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      bc.save();
+      bc.scale(1, (b.ry * H) / (b.rx * W));
+      bc.globalAlpha = b.a;
+      bc.fillStyle   = grd;
+      bc.beginPath();
+      bc.arc(b.x * W, (b.y * H) / ((b.ry * H) / (b.rx * W)), b.rx * W, 0, Math.PI * 2);
+      bc.fill();
+      bc.restore();
     }
+  }
+
+  function drawBlobs () {
+    if (blobCanvas) ctx.drawImage(blobCanvas, 0, 0);
   }
 
   function resize () {
     W = canvas.width  = window.innerWidth;
     H = canvas.height = window.innerHeight;
-    /* repaint static layers on resize */
+    buildBlobCache();
     ctx.clearRect(0, 0, W, H);
     drawBlobs();
     drawMoon(0);
@@ -790,25 +790,24 @@
     stars = Array.from({ length: STAR_COUNT }, mkStar);
   }
 
-  function tick (t) {
-    /* clear & repaint base layers each frame (cheap — no pixel read) */
+  function tick () {
+    /* static bg layers already painted in resize() — only motes move */
     ctx.clearRect(0, 0, W, H);
     ctx.globalAlpha = 1;
     drawBlobs();
-    drawMoon(t || 0);
-    drawStrokes(t || 0);
+    drawMoon(0);
+    drawStrokes(0);
 
-    /* stars — slow twinkle */
+    /* stars — static, no twinkle */
     for (const s of stars) {
-      const tw = 0.35 + 0.45 * (0.5 + 0.5 * Math.sin((t || 0) * s.speed + s.phase));
       ctx.beginPath();
       ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
       ctx.fillStyle = '#f4f1e8';
-      ctx.globalAlpha = tw;
+      ctx.globalAlpha = 0.6;
       ctx.fill();
     }
 
-    /* motes on top */
+    /* motes — still drift, very cheap */
     for (const m of motes) {
       ctx.beginPath();
       ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
