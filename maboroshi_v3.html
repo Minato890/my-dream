@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>幻</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:    #1c1a2e;
+      --moon:  #EAE6DC;
+      --mist:  #A89EC9;
+      --amber: #C9974A;
+      --dim:   #6B6585;
+      --faint: #2C2A45;
+      --panel: rgba(19, 17, 33, 0.62);
+      --panel-edge: rgba(168, 158, 201, 0.14);
+    }
+
+    html { font-size: 18px; scroll-behavior: smooth; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--moon);
+      font-family: 'Noto Serif JP', serif;
+      font-weight: 300;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Background canvas ── */
+    #bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ── Atmosphere: moonlight glow + vignette, sits above the canvas ── */
+    .atmosphere {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse 60% 45% at 80% 8%,  rgba(234,230,220,0.16) 0%, rgba(234,230,220,0.05) 35%, transparent 65%),
+        radial-gradient(ellipse 70% 50% at 18% 92%, rgba(201,151,74,0.07) 0%, transparent 60%),
+        radial-gradient(ellipse 100% 60% at 50% 100%, rgba(8,6,18,0.65) 0%, transparent 65%),
+        radial-gradient(ellipse 100% 45% at 50% 0%,  rgba(8,6,18,0.45) 0%, transparent 60%);
+    }
+
+    /* faint paper grain to soften flatness and add texture */
+    .grain {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      opacity: 0.05;
+      mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 160px 160px;
+    }
+
+    /* ── Content wrapper ── */
+    .wrapper {
+      position: relative;
+      z-index: 1;
+      max-width: 660px;
+      margin: 0 auto;
+      padding: 0 2rem 8rem;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 4rem 0 5rem;
+      position: relative;
+    }
+
+    .hero-kanji {
+      font-family: 'Noto Serif JP', serif;
+      font-weight: 300;
+      font-size: clamp(8rem, 26vw, 16rem);
+      line-height: 0.9;
+      color: transparent;
+      -webkit-text-stroke: 1px var(--mist);
+      opacity: 0;
+      animation: fadeUp 2.2s cubic-bezier(.16,1,.3,1) 0.3s forwards;
+      user-select: none;
+    }
+
+    .hero-epigraph {
+      margin-top: 2.8rem;
+      font-size: 0.82rem;
+      line-height: 2.3;
+      color: var(--mist);
+      letter-spacing: 0.07em;
+      max-width: 400px;
+      opacity: 0;
+      animation: fadeUp 2.2s cubic-bezier(.16,1,.3,1) 1s forwards;
+      padding: 1.6rem 0;
+    }
+    .hero-epigraph::before,
+    .hero-epigraph::after {
+      content: '';
+      display: block;
+      width: 28px;
+      height: 1px;
+      background: var(--amber);
+      margin: 0 auto;
+      opacity: 0.7;
+    }
+    .hero-epigraph::before { margin-bottom: 1.6rem; }
+    .hero-epigraph::after  { margin-top:    1.6rem; }
+
+    .hero-scroll-hint {
+      position: absolute;
+      bottom: 2.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 0.62rem;
+      letter-spacing: 0.28em;
+      color: var(--dim);
+      text-transform: uppercase;
+      white-space: nowrap;
+      opacity: 0;
+      animation: fadeIn 2s ease 1.9s forwards;
+    }
+    .hero-scroll-hint::before,
+    .hero-scroll-hint::after {
+      content: '';
+      display: block;
+      width: 24px;
+      height: 1px;
+      background: currentColor;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+      margin: 5rem 0 4rem;
+      opacity: 0.3;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--mist), transparent);
+    }
+    .divider-glyph {
+      font-size: 0.5rem;
+      color: var(--amber);
+      font-family: 'Cormorant Garamond', serif;
+    }
+    .essay > .divider:first-child {
+      margin-top: 0;
+    }
+
+    /* ── Essay ── */
+    .essay {
+      opacity: 0;
+      animation: fadeIn 1.8s ease 1.5s forwards;
+      position: relative;
+      background: linear-gradient(170deg, var(--panel), rgba(14,13,26,0.58));
+      border: 1px solid var(--panel-edge);
+      border-radius: 28px;
+      padding: 3.6rem 3rem;
+      backdrop-filter: blur(20px) saturate(115%);
+      -webkit-backdrop-filter: blur(20px) saturate(115%);
+      box-shadow: 0 30px 80px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    .essay-opening {
+      font-size: 1.04rem;
+      line-height: 2.4;
+      color: var(--amber);
+      letter-spacing: 0.05em;
+      margin-bottom: 3rem;
+      font-weight: 400;
+      text-indent: 0;
+    }
+
+    .essay p {
+      font-size: 1rem;
+      line-height: 2.5;
+      color: var(--moon);
+      letter-spacing: 0.03em;
+      margin-bottom: 2.5rem;
+      text-indent: 1em;
+    }
+
+    .essay em {
+      font-style: normal;
+      color: var(--mist);
+      font-weight: 400;
+    }
+
+    .pull-quote {
+      margin: 4.5rem 0;
+      padding: 2.5rem 1.5rem;
+      border-top: 1px solid var(--faint);
+      border-bottom: 1px solid var(--faint);
+      font-size: 1rem;
+      line-height: 2.4;
+      color: var(--mist);
+      letter-spacing: 0.05em;
+      text-align: center;
+      font-weight: 400;
+    }
+
+    /* ── Closing ── */
+    .closing {
+      margin-top: 6rem;
+      padding-top: 3rem;
+      border-top: 1px solid var(--faint);
+      text-align: center;
+      position: relative;
+      padding-bottom: 4rem;
+    }
+    .closing-text {
+      font-size: 0.84rem;
+      line-height: 2.5;
+      color: var(--amber);
+      letter-spacing: 0.06em;
+    }
+    .closing-kanji {
+      margin-top: 2.5rem;
+      font-size: 3.2rem;
+      color: transparent;
+      -webkit-text-stroke: 0.5px var(--dim);
+      font-family: 'Noto Serif JP', serif;
+      font-weight: 300;
+    }
+    .signature {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      font-family: 'Noto Serif JP', serif;
+      font-size: 0.78rem;
+      font-weight: 300;
+      color: var(--dim);
+      letter-spacing: 0.12em;
+    }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 4rem;
+      padding: 2rem 0 4rem;
+      text-align: center;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 0.62rem;
+      letter-spacing: 0.22em;
+      color: var(--dim);
+      text-transform: uppercase;
+      opacity: 0.5;
+    }
+
+    /* ── Music Player ── */
+    #music-player {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      background: rgba(16, 14, 34, 0.78);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(168, 158, 201, 0.18);
+      border-radius: 100px;
+      padding: 0.6rem 1.4rem 0.6rem 0.85rem;
+      opacity: 0;
+      animation: fadeIn 1.5s ease 2.4s forwards;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+      cursor: default;
+    }
+
+    #play-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid rgba(168, 158, 201, 0.25);
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--mist);
+      flex-shrink: 0;
+      transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    }
+    #play-btn:hover { background: rgba(168,158,201,0.1); transform: scale(1.08); }
+    #play-btn:active { transform: scale(0.96); }
+    #play-btn svg { width: 13px; height: 13px; fill: currentColor; }
+
+    .player-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+    .player-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 0.78rem;
+      font-style: italic;
+      color: var(--moon);
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .player-sub {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 0.58rem;
+      color: var(--dim);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    /* waveform */
+    .waveform {
+      display: flex;
+      align-items: center;
+      gap: 2.5px;
+      height: 18px;
+      margin-left: 0.15rem;
+    }
+    .waveform span {
+      display: block;
+      width: 2px;
+      background: var(--mist);
+      border-radius: 2px;
+      height: 3px;
+      opacity: 0.35;
+      transition: height 0.2s;
+    }
+    .waveform.playing span { opacity: 0.65; }
+    .waveform.playing span:nth-child(1) { animation: wbar 1.0s ease-in-out infinite; }
+    .waveform.playing span:nth-child(2) { animation: wbar 0.75s ease-in-out 0.12s infinite; }
+    .waveform.playing span:nth-child(3) { animation: wbar 1.2s ease-in-out 0.06s infinite; }
+    .waveform.playing span:nth-child(4) { animation: wbar 0.85s ease-in-out 0.18s infinite; }
+    .waveform.playing span:nth-child(5) { animation: wbar 1.05s ease-in-out 0.09s infinite; }
+    @keyframes wbar {
+      0%,100% { height: 3px; }
+      50%      { height: 15px; }
+    }
+
+    /* status text under player */
+    #player-status {
+      position: fixed;
+      bottom: 0.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 0.58rem;
+      letter-spacing: 0.15em;
+      color: var(--dim);
+      text-transform: uppercase;
+      opacity: 0;
+      transition: opacity 0.4s;
+      white-space: nowrap;
+    }
+    #player-status.visible { opacity: 1; }
+
+    /* ── Kobayashi-sensei's Comments ── */
+    #sensei-toggle {
+      position: fixed;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      z-index: 91;
+      background: rgba(16, 14, 34, 0.78);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(168, 158, 201, 0.18);
+      border-right: none;
+      border-radius: 10px 0 0 10px;
+      padding: 1.3rem 0.5rem;
+      cursor: pointer;
+      color: var(--mist);
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 0.68rem;
+      letter-spacing: 0.24em;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      white-space: nowrap;
+      transition: color 0.25s ease, background 0.25s ease;
+    }
+    #sensei-toggle:hover { color: var(--amber); background: rgba(16, 14, 34, 0.92); }
+
+    #sensei-panel {
+      position: fixed;
+      top: 50%;
+      right: 0;
+      transform: translate(100%, -50%);
+      z-index: 92;
+      width: min(300px, 86vw);
+      max-height: 72vh;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+      background: linear-gradient(170deg, var(--panel), rgba(14, 13, 26, 0.82));
+      border: 1px solid var(--panel-edge);
+      border-radius: 16px;
+      padding: 1.5rem 1.4rem;
+      backdrop-filter: blur(20px) saturate(115%);
+      -webkit-backdrop-filter: blur(20px) saturate(115%);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+      transition: transform 0.45s cubic-bezier(.16,1,.3,1), opacity 0.35s ease;
+      opacity: 0;
+    }
+    #sensei-panel.open {
+      transform: translate(0, -50%);
+      opacity: 1;
+    }
+
+    .sensei-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic;
+      font-size: 0.95rem;
+      letter-spacing: 0.06em;
+      color: var(--amber);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .sensei-close {
+      background: transparent;
+      border: none;
+      color: var(--dim);
+      font-size: 1.1rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0.1rem 0.3rem;
+      transition: color 0.2s;
+    }
+    .sensei-close:hover { color: var(--amber); }
+
+    #sensei-textarea {
+      width: 100%;
+      min-height: 160px;
+      resize: vertical;
+      background: rgba(8, 7, 16, 0.35);
+      border: 1px solid var(--panel-edge);
+      border-radius: 10px;
+      padding: 0.8rem 0.9rem;
+      color: var(--moon);
+      font-family: 'Noto Serif JP', serif;
+      font-weight: 300;
+      font-size: 0.85rem;
+      line-height: 1.9;
+      letter-spacing: 0.03em;
+    }
+    #sensei-textarea:focus { outline: none; border-color: var(--mist); }
+    #sensei-textarea::placeholder { color: var(--dim); }
+
+    .sensei-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.8rem;
+    }
+    .sensei-status {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      color: var(--dim);
+      text-transform: uppercase;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .sensei-status.visible { opacity: 1; }
+
+    #sensei-save {
+      background: transparent;
+      border: 1px solid rgba(168, 158, 201, 0.25);
+      border-radius: 100px;
+      padding: 0.5rem 1.2rem;
+      color: var(--mist);
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+    }
+    #sensei-save:hover {
+      background: rgba(168, 158, 201, 0.1);
+      color: var(--moon);
+      border-color: rgba(168, 158, 201, 0.4);
+    }
+    #sensei-save:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    @media (max-width: 600px) {
+      #sensei-toggle { font-size: 0.6rem; padding: 1rem 0.4rem; }
+      #sensei-panel  { width: 88vw; max-height: 65vh; }
+    }
+
+    /* ── Animations ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+      .hero-kanji, .hero-epigraph, .essay, #music-player { opacity: 1 !important; transform: none !important; }
+      .hero-scroll-hint { opacity: 1 !important; }
+      #music-player { transform: translateX(-50%) !important; }
+    }
+
+    @media (max-width: 600px) {
+      html { font-size: 16px; }
+      .wrapper { padding: 0 1.25rem 6rem; }
+      .essay { padding: 2.4rem 1.5rem; border-radius: 18px; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+<div class="atmosphere"></div>
+<div class="grain"></div>
+<audio id="bg-audio" loop preload="none">
+  <source src="audio/stay-with-me.mp3" type="audio/mpeg">
+</audio>
+
+<div class="wrapper">
+
+  <section class="hero">
+    <div class="hero-kanji">幻</div>
+    <p class="hero-epigraph">
+      すべての現実は、かつて夢であった。<br>
+      そしてすべての夢は、かつて誰かが<br>手放さなかった幻であった。
+    </p>
+    <div class="hero-scroll-hint">読み進める</div>
+  </section>
+
+  <article class="essay">
+
+    <div class="divider"><span class="divider-glyph">◈</span></div>
+
+    <p class="essay-opening">
+      すべての現実は、かつて夢であった。そしてすべての夢は、かつて誰かが手放さなかった幻であった。
+    </p>
+
+    <p>日本に来る前、私はこう思っていた。これほど整然とし、効率的で、精緻に機能する社会ならば、自然と<em>「間」</em>が生まれるのではないか - 考えるための間、問うための間、未解決の雑事の喧騒に煩わされず、ただ存在するための間が、と。しかし実際に目にしたのは、世界で最も進んだ社会の一つに生きながら、私がこれまで見た中でも最も忙しそうに見える人々の姿だった。便利さは彼らの時間を解放したのではなく、ただその時間を費やすための新たな対象を増やしただけなのかもしれない、と私には感じられた。そしてその増殖の中で、<em>「なぜ」という問いは、いつしか静かに姿を消していった</em>ように思う。これほど精緻な社会であれば、現実の本質 - なぜ我々は存在するのか、何のためにここにいるのか、これら全てに何の意味があるのか - について、最も深い好奇心を抱いているはずだと、私は思っていた。だが奇妙なことに、それは最も薄いものの一つだった。誤解のないよう、ここで明らかにしておきたい。これは日本への批判ではなく、どこかと比べているわけでも断じてない。むしろその根底にあるのは、<em>敬意と、憧れに近いもの</em>だ。これほど整然とし規律ある社会であればこそ、深い問いへの余白も生まれるはずだと期待していた。だからこそ、その逆説に、私はただ、静かに驚いたのだ。</p>
+
+    <p>正直に言うと、この感覚は、日本に来るずっと前から、すでに私の中で静かに育っていた。ただ、ここに来て、それから目を逸らすことがもはや出来なくなった。私の夢は、社会が集団として「追い求める価値があるもの」をどう決めるか、その在り方に少しでも変化をもたらすことだ - 生存の基盤が満たされたなら、その先に求めるべきは富や地位ではなく、理解であってほしいと思う。<em>「なぜ」と問いを立てて足を止める人間が、怠けていると見なされるのではなく</em>、忙しい世界がもはや自分自身に許せなくなったことをしている人として、認められるような世界を、私は思い描いている。なぜこれがこれほど想像し難いのか - その理由は単純だ。共有された幻想の最も危険なところは、誰もがその中で生きている時、それはもはや幻想には見えなくなるということだ。それはただ、現実に見える。</p>
+
+    <div class="pull-quote">
+      共有された幻想の最も危険なところは、<br>誰もがその中で生きている時、<br>それはもはや幻想には見えなくなるということだ。
+    </div>
+
+    <p>私はインドの、伝統的で信仰心の強い家庭に育った。そこでは、人生の型は、私が問いを持つことを知るよりずっと前に、すでに敷かれていた。神が世界を創った。良い人間であれ、仕事を持て、金を稼げ、結婚せよ、子を持て、そしてその子にも同じことを教えよ - そういうものだった。私はこれを疑わなかった。疑う力がなかったからではない。ただ、<em>疑うという発想そのものが、訪れなかったのだ</em>。世界はすでに完成していて、私はただその中に生きていた。</p>
+
+    <p>その反逆は、ゆっくりと、はっきりとした引き金もなく訪れた。だが、もし一つの刹那を指し示すとしたら、それはカール・セーガンの「コスモス」を見ていた時だ。宇宙は突然、あまりにも広大で、あまりにも古く、私が「世界のすべて」として手渡されていたものは、無限の中の小さな点になった。その時、私は初めて、本当の意味で問うことを知った。私の夢は、最も正直に言えば、<em>生涯をかけて考えること</em> - ほとんどの人には許されないほど、本当に深く考えること - そして、その思考を、私がいなくなった後も問いを発し続けるひとつの仕事として、形にすることだ。</p>
+
+    <p>心は、孤立した中で形づくられるものではなく、社会の中で形づくられるものだと、私は思う。その社会が、地位や蓄積によって人の価値を測るのであれば、心は誰に教えられるでもなく、自然とその方向を向いてしまうのではないか。誰もその競争を選んだわけではない。それは、生まれた時にはすでに、そこにあったのだ。終着点というものは存在しない。なぜなら、そのシステムそのものが、終わりを持つようには作られていないからだ - あるのはただ、<em>次の比較、次の節目、次に自分を測るための誰かだけだ</em>。これはあくまで、私個人の所感に過ぎない。けれど、もし変化が訪れるとすれば、それは個人に強いられるものではなく、一つの文化が「良い人生とは何か」をどう定義するか、その集団的な価値観のレベルで、静かに生まれてくるものだと、私は思っている。その定義がほんの少しでも変われば、その中で形づくられる心もまた、変わっていくのではないだろうか。</p>
+
+    <p>私は、人が今の仕事を手放すべきだとか、何かを作る人々がその手を止めるべきだとか、そういうことを言いたいわけではない。私が望むのは、<em>問いや、思考や、アイデアが、お金や社会的地位と同じくらいの重みを持つ世界だ</em> - それらが無価値だからではない。ただ、それだけが存在の唯一の尺度になってしまった時、何か大切なものが失われてしまうように思うからだ。私は完璧な社会を夢見ているわけではない。ただ、もう少し静かな社会を、夢見ているだけだ。</p>
+
+    <p>これが、とても大きな望みであることは、自分でもわかっている。だからこそ、謙虚にこの思いを抱いていたい。一つの文明が価値を測る基準そのものを変えるということは、一人の人間が一生で成し遂げられることではない。けれど、最初からそんなに大きくある必要はないのかもしれない。もし私が、生涯のうちにたった一人 - かつての私と同じように、揺るぎない型を手渡された誰か - に届くことができたなら。そしてその人が、ある一つの問いに出会い、自分でも驚くほど、その問いと共にいたいと感じたなら。そしてその人が、いつか別の誰かを、ふと立ち止まらせることができたなら。<em>そこから、何かが静かに始まるのではないか</em>。その波紋を、私が生きている間に見られるかどうかはわからない。けれど、それでも、一生をかけるだけの意味があると、私は信じている。</p>
+
+    <p>私は、自分がこの急流と無縁だとは言わない。世界がこれほどの速さで動いている中で、立ち止まることは、想像以上に難しい。インドでの日々が、生きていくためだけに多くの力を要する、ある種の激しさを伴うものだったからこそ、この新しい環境の静寂は、私にとって深い安らぎのように感じられた。その静けさの中で、私は気づいた - 言語そのものが、思考の輪郭を形づくっているのだと。英語を学んだ時、ヒンディー語には決して宿すことのできなかった感情が、初めて可能になった。今でも、その違いに時々驚く。<em>言語はそれぞれ、異なる仕方で現実を意味へと刻んでいく</em>。それもまた、私がここにいる理由の一つだ - 人々を、矛盾を、せめぎ合う考え方を、静かに、誠実に、吸収していくこと。いつか、思考が熟し、言葉が整った時、私は書くだろう。急ぐ必要はない。その夢は、今日叶えられる必要はない。ただ、一つひとつの思考とともに、生きられればいい。</p>
+
+    <p>簡単なことではない。この望みが、夢というよりも、ただの個人的な妄想のように感じられる瞬間もある。けれど、変容とはまさにこうして始まるのだと、私は思うようになった。最初、それは幻だ - 脆く、不確かで、自分だけのものだ。それから、ゆっくりと、信念と勇気によって、それは夢になる。そして夢になれば、それが現実になるのは、<em>時間と誠実な努力だけの問題だ</em>。</p>
+
+    <div class="divider"><span class="divider-glyph">◈</span></div>
+
+    <div class="closing">
+      <p class="closing-text">
+        すべての現実は、かつて夢であった。<br>
+        そしてすべての夢は、かつて誰かが<br>手放さなかった幻であった。
+      </p>
+      <div class="closing-kanji">幻</div>
+      <p class="signature">〜ディーパック</p>
+    </div>
+
+  </article>
+
+  <footer>
+    <span>書かれた言葉は、問いの痕跡である</span>
+  </footer>
+
+</div>
+
+<!-- Kobayashi-sensei's Comments -->
+<button id="sensei-toggle" aria-expanded="false" aria-controls="sensei-panel">小林先生のコメント</button>
+<div id="sensei-panel" aria-label="小林先生のコメント">
+  <div class="sensei-title">
+    <span>小林先生のコメント</span>
+    <button class="sensei-close" id="sensei-close" aria-label="閉じる">×</button>
+  </div>
+  <textarea id="sensei-textarea" placeholder="ここに感想やコメントをお書きください…"></textarea>
+  <div class="sensei-footer">
+    <span class="sensei-status" id="sensei-status"></span>
+    <button id="sensei-save">送信する</button>
+  </div>
+</div>
+
+<!-- Music Player UI -->
+<div id="music-player">
+  <button id="play-btn" aria-label="Play / Pause">
+    <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    <svg id="icon-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+  </button>
+  <div class="player-info">
+    <span class="player-title">真夜中のドア〜Stay With Me</span>
+    <span class="player-sub">Miki Matsubara</span>
+  </div>
+  <div class="waveform" id="waveform">
+    <span></span><span></span><span></span><span></span><span></span>
+  </div>
+</div>
+<div id="player-status"></div>
+
+<script>
+/* ===================================================
+   BACKGROUND — watercolour nebula + drifting motes
+   =================================================== */
+(function () {
+  const canvas = document.getElementById('bg-canvas');
+  const ctx    = canvas.getContext('2d');
+  let W, H;
+
+  /* Nebula blobs — painted every frame (cheap, no pixel read) */
+  const BLOBS = [
+    { x: 0.12, y: 0.18, rx: 0.38, ry: 0.28, color: '#3b2d6e', a: 0.22 },
+    { x: 0.78, y: 0.30, rx: 0.30, ry: 0.22, color: '#1e2f6e', a: 0.18 },
+    { x: 0.50, y: 0.72, rx: 0.42, ry: 0.26, color: '#4a2060', a: 0.16 },
+    { x: 0.85, y: 0.85, rx: 0.25, ry: 0.20, color: '#2a1a50', a: 0.20 },
+    { x: 0.25, y: 0.88, rx: 0.28, ry: 0.18, color: '#1a3050', a: 0.14 },
+    { x: 0.95, y: 0.04, rx: 0.34, ry: 0.30, color: '#4a3a2a', a: 0.10 },
+    { x: 0.06, y: 0.55, rx: 0.22, ry: 0.30, color: '#2a3a55', a: 0.13 },
+    { x: 0.60, y: 0.10, rx: 0.26, ry: 0.18, color: '#5a2f4a', a: 0.10 },
+  ];
+
+  /* The moon — a soft, breathing glow in the upper sky */
+  const MOON = { x: 0.82, y: 0.10, r: 0.05 };
+  let moonPulse = 0;
+
+  function drawMoon (t) {
+    const cx = MOON.x * W, cy = MOON.y * H;
+    const r  = Math.max(W, H) * MOON.r;
+    const pulse = 1 + Math.sin(t * 0.00035) * 0.05;
+
+    /* outer halo */
+    let grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 9 * pulse);
+    grd.addColorStop(0,    'rgba(234,230,220,0.16)');
+    grd.addColorStop(0.18, 'rgba(234,230,220,0.07)');
+    grd.addColorStop(1,    'rgba(234,230,220,0)');
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 9 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    /* moon disc */
+    grd = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 0, cx, cy, r * 1.4);
+    grd.addColorStop(0,   '#fbf8ee');
+    grd.addColorStop(0.6, '#e8e2d2');
+    grd.addColorStop(1,   '#cdc6bb');
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  /* Faint ink-brush strokes drifting through the scene, like sumi-e calligraphy */
+  const STROKES = [
+    { y: 0.22, amp: 0.05, sway: 0.00006, phase: 0,    w: 2.4, color: '168,158,201', a: 0.10 },
+    { y: 0.46, amp: 0.07, sway: 0.00004, phase: 2.1,  w: 1.6, color: '201,151,74',  a: 0.07 },
+    { y: 0.68, amp: 0.04, sway: 0.00005, phase: 4.3,  w: 2.0, color: '234,230,220', a: 0.06 },
+    { y: 0.84, amp: 0.06, sway: 0.00003, phase: 1.4,  w: 1.4, color: '168,158,201', a: 0.05 },
+  ];
+
+  function drawStrokes (t) {
+    for (const s of STROKES) {
+      const baseY = s.y * H;
+      const drift = Math.sin(t * s.sway + s.phase) * s.amp * H;
+      ctx.save();
+      ctx.globalAlpha = s.a;
+      ctx.strokeStyle = `rgba(${s.color},1)`;
+      ctx.lineWidth = s.w;
+      ctx.lineCap = 'round';
+      ctx.filter = 'blur(2.5px)';
+      ctx.beginPath();
+      ctx.moveTo(-0.1 * W, baseY + drift);
+      ctx.bezierCurveTo(
+        0.30 * W, baseY + drift - 0.05 * H,
+        0.65 * W, baseY + drift + 0.06 * H,
+        1.1 * W,  baseY + drift - 0.02 * H
+      );
+      ctx.stroke();
+      ctx.filter = 'none';
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* Motes — fine drifting dust */
+  const MOTE_COLORS = ['#c8c2e8', '#e8e4da', '#a89ec9', '#d4a96a', '#ffffff'];
+  const MOTE_COUNT  = 130;
+  let motes = [];
+
+  function mkMote () {
+    return {
+      x:  Math.random() * W, y:  Math.random() * H,
+      r:  Math.random() * 0.9 + 0.12,
+      vx: (Math.random() - 0.5) * 0.045,
+      vy: (Math.random() - 0.5) * 0.045,
+      a:  Math.random() * 0.32 + 0.04,
+      da: (Math.random() - 0.5) * 0.0012,
+      c:  MOTE_COLORS[Math.floor(Math.random() * MOTE_COLORS.length)],
+    };
+  }
+
+  /* Stars — larger, slow-twinkling points scattered across the upper sky */
+  const STAR_COUNT = 38;
+  let stars = [];
+
+  function mkStar () {
+    return {
+      x: Math.random() * W,
+      y: Math.random() * H * 0.62,
+      r: Math.random() * 1.1 + 0.6,
+      phase: Math.random() * Math.PI * 2,
+      speed: Math.random() * 0.0012 + 0.0006,
+    };
+  }
+
+  function drawBlobs () {
+    for (const b of BLOBS) {
+      const grd = ctx.createRadialGradient(
+        b.x * W, b.y * H, 0,
+        b.x * W, b.y * H, Math.max(b.rx * W, b.ry * H)
+      );
+      grd.addColorStop(0,   b.color + 'BB');
+      grd.addColorStop(0.5, b.color + '55');
+      grd.addColorStop(1,   'transparent');
+      ctx.save();
+      ctx.scale(1, (b.ry * H) / (b.rx * W));
+      ctx.globalAlpha = b.a;
+      ctx.fillStyle   = grd;
+      ctx.beginPath();
+      ctx.arc(b.x * W, (b.y * H) / ((b.ry * H) / (b.rx * W)), b.rx * W, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function resize () {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    /* repaint static layers on resize */
+    ctx.clearRect(0, 0, W, H);
+    drawBlobs();
+    drawMoon(0);
+    drawStrokes(0);
+  }
+
+  function init () {
+    resize();
+    motes = Array.from({ length: MOTE_COUNT }, mkMote);
+    stars = Array.from({ length: STAR_COUNT }, mkStar);
+  }
+
+  function tick (t) {
+    /* clear & repaint base layers each frame (cheap — no pixel read) */
+    ctx.clearRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+    drawBlobs();
+    drawMoon(t || 0);
+    drawStrokes(t || 0);
+
+    /* stars — slow twinkle */
+    for (const s of stars) {
+      const tw = 0.35 + 0.45 * (0.5 + 0.5 * Math.sin((t || 0) * s.speed + s.phase));
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = '#f4f1e8';
+      ctx.globalAlpha = tw;
+      ctx.fill();
+    }
+
+    /* motes on top */
+    for (const m of motes) {
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+      ctx.fillStyle   = m.c;
+      ctx.globalAlpha = Math.max(0.02, Math.min(0.36, m.a));
+      ctx.fill();
+
+      m.x += m.vx; m.y += m.vy; m.a += m.da;
+      if (m.a < 0.02 || m.a > 0.36) m.da *= -1;
+      if (m.x < -4) m.x = W + 4; if (m.x > W + 4) m.x = -4;
+      if (m.y < -4) m.y = H + 4; if (m.y > H + 4) m.y = -4;
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(tick);
+  }
+
+  window.addEventListener('resize', resize);
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    resize(); /* just static blobs, moon and strokes */
+  } else {
+    init(); tick(0);
+  }
+})();
+
+
+/* ===================================================
+   MUSIC PLAYER — native <audio> element
+   Point AUDIO_SRC at an audio file you host alongside this page
+   (e.g. an "audio" folder next to this .html file).
+   =================================================== */
+(function () {
+  const AUDIO_SRC = 'audio/stay-with-me.mp3'; // ← path to your audio file
+  const audio     = document.getElementById('bg-audio');
+  const playBtn   = document.getElementById('play-btn');
+  const iconPlay  = document.getElementById('icon-play');
+  const iconPause = document.getElementById('icon-pause');
+  const waveform  = document.getElementById('waveform');
+  const statusEl  = document.getElementById('player-status');
+
+  let playing = false;
+  let failed  = false;
+  let statusTimer = null;
+
+  audio.src    = AUDIO_SRC;
+  audio.volume = 0.7;
+
+  function showStatus (msg, duration) {
+    statusEl.textContent = msg;
+    statusEl.classList.add('visible');
+    clearTimeout(statusTimer);
+    if (duration) statusTimer = setTimeout(() => statusEl.classList.remove('visible'), duration);
+  }
+
+  function setPlaying (val) {
+    playing = val;
+    iconPlay.style.display  = val ? 'none' : '';
+    iconPause.style.display = val ? ''     : 'none';
+    waveform.classList.toggle('playing', val);
+  }
+
+  function markFailed (msg) {
+    failed = true;
+    setPlaying(false);
+    showStatus(msg || '音楽を読み込めませんでした');
+    playBtn.style.opacity = '0.4';
+    playBtn.style.cursor  = 'not-allowed';
+  }
+
+  audio.addEventListener('error', () => markFailed('音楽を読み込めませんでした'));
+  audio.addEventListener('play',  () => { setPlaying(true);  showStatus(''); });
+  audio.addEventListener('pause', () => setPlaying(false));
+  audio.addEventListener('ended', () => setPlaying(false));
+  audio.addEventListener('waiting', () => showStatus('読み込み中...'));
+  audio.addEventListener('playing', () => showStatus(''));
+
+  playBtn.addEventListener('click', () => {
+    if (failed) { showStatus('音楽を読み込めませんでした', 2500); return; }
+    if (playing) {
+      audio.pause();
+    } else {
+      audio.play().catch(() => markFailed('音楽を読み込めませんでした'));
+    }
+  });
+})();
+
+/* ===================================================
+   KOBAYASHI-SENSEI'S COMMENTS
+   Saved locally in the reader's own browser (localStorage) —
+   private to whoever opens this page on this device.
+   =================================================== */
+(function () {
+  const STORAGE_KEY = 'maboroshi-sensei-comments';
+
+  /* ── Web3Forms ──────────────────────────────────────────────
+     1. Go to https://web3forms.com
+     2. Enter the email address that should receive comments
+     3. They'll email you a free "Access Key" — paste it below
+     ────────────────────────────────────────────────────────── */
+  const WEB3FORMS_ACCESS_KEY = '7f67f855-5e2e-486c-b566-5f5460032cfc';
+
+  const toggle    = document.getElementById('sensei-toggle');
+  const panel     = document.getElementById('sensei-panel');
+  const closeBtn  = document.getElementById('sensei-close');
+  const textarea  = document.getElementById('sensei-textarea');
+  const saveBtn   = document.getElementById('sensei-save');
+  const statusEl  = document.getElementById('sensei-status');
+
+  /* restore any previously saved comment */
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) textarea.value = saved;
+  } catch (e) { /* localStorage unavailable — panel still works, just won't persist */ }
+
+  function openPanel () {
+    panel.classList.add('open');
+    toggle.setAttribute('aria-expanded', 'true');
+  }
+  function closePanel () {
+    panel.classList.remove('open');
+    toggle.setAttribute('aria-expanded', 'false');
+  }
+
+  toggle.addEventListener('click', () => {
+    panel.classList.contains('open') ? closePanel() : openPanel();
+  });
+  closeBtn.addEventListener('click', closePanel);
+
+  let statusTimer;
+  function showStatus (msg, autoHide) {
+    statusEl.textContent = msg;
+    statusEl.classList.add('visible');
+    clearTimeout(statusTimer);
+    if (autoHide) statusTimer = setTimeout(() => statusEl.classList.remove('visible'), 2500);
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    const text = textarea.value.trim();
+
+    /* always keep a local copy, regardless of email outcome */
+    try { localStorage.setItem(STORAGE_KEY, textarea.value); } catch (e) {}
+
+    if (!text) { showStatus('コメントが空です', true); return; }
+
+    if (WEB3FORMS_ACCESS_KEY === 'YOUR_WEB3FORMS_ACCESS_KEY') {
+      /* no email key configured yet — just confirm the local save */
+      showStatus('保存しました', true);
+      return;
+    }
+
+    showStatus('送信中…');
+    saveBtn.disabled = true;
+
+    try {
+      const res = await fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          access_key: WEB3FORMS_ACCESS_KEY,
+          subject:    '「幻」— 小林先生からのコメント',
+          from_name:  '小林先生のコメント（幻）',
+          message:    text,
+        }),
+      });
+      const data = await res.json();
+      showStatus(data.success ? '送信しました' : '送信できませんでした', true);
+    } catch (err) {
+      showStatus('送信できませんでした（保存済み）', true);
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+})();
+
+</script>
+
+</body>
+</html>
